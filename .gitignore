@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual env
+.venv/
+env/
+venv/
+
+# Environment variables
+.env
+
+# Database
+*.db
+*.sqlite3
+
+# Alembic
+alembic.ini
+
+# Logs
+*.log
+
+# Mac
+.DS_Store
+
+# VSCode
+.vscode/
+
+# Node (frontend)
+node_modules/
+.next/
+dist/
+
+# Coverage
+.coverage
+htmlcov/
+
+# Pytest
+.pytest_cache/
+
+# Migrations (optional — your choice)
+# migrations/versions/*
