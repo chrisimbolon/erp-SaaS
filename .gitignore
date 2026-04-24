@@ -16,8 +16,6 @@ venv/
 *.db
 *.sqlite3
 
-# Alembic
-alembic.ini
 
 # Logs
 *.log
