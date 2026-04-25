@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Arthasee colour system — light mode */
+    --background:       0 0% 100%;
+    --foreground:       220 13% 7%;
+    --card:             0 0% 100%;
+    --card-foreground:  220 13% 7%;
+    --popover:          0 0% 100%;
+    --popover-foreground: 220 13% 7%;
+
+    /* Brand green */
+    --primary:          152 62% 40%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary:        220 14% 96%;
+    --secondary-foreground: 220 13% 18%;
+    --muted:            220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent:           220 14% 96%;
+    --accent-foreground: 220 13% 18%;
+
+    --destructive:      0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border:           220 13% 91%;
+    --input:            220 13% 91%;
+    --ring:             152 62% 40%;
+
+    --radius: 0.5rem;
+
+    /* Arthasee custom tokens */
+    --sidebar-bg:       220 13% 9%;
+    --sidebar-fg:       220 9% 64%;
+    --sidebar-fg-active: 0 0% 100%;
+    --sidebar-border:   220 13% 14%;
+    --sidebar-hover:    220 13% 14%;
+    --sidebar-active:   152 62% 20%;
+
+    --surface-subtle:   220 14% 98%;
+    --surface-raised:   0 0% 100%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Clean scrollbar */
+  ::-webkit-scrollbar       { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-muted-foreground/30; }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+
+  /* Arthasee sidebar utilities */
+  .sidebar-item {
+    @apply flex items-center gap-2.5 px-3 py-2 rounded-md text-sm
+           transition-colors duration-150 cursor-pointer select-none;
+    color: hsl(var(--sidebar-fg));
+  }
+  .sidebar-item:hover {
+    background: hsl(var(--sidebar-hover));
+    color: hsl(var(--sidebar-fg-active));
+  }
+  .sidebar-item.active {
+    background: hsl(var(--sidebar-active));
+    color: hsl(var(--sidebar-fg-active));
+  }
+
+  /* Stat card hover lift */
+  .stat-card {
+    @apply transition-all duration-200;
+  }
+  .stat-card:hover {
+    @apply shadow-md -translate-y-0.5;
+  }
+}
