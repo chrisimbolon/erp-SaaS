@@ -22,8 +22,9 @@ Creates:
 All passwords: KLA_Dev_2026! (change in production)
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datetime import datetime, timedelta, timezone
@@ -45,7 +46,8 @@ def seed():
         print()
 
         # ── 1. SuperAdmin ─────────────────────────────────────────────────────
-        from app.modules.tenants.infrastructure.models import UserModel, TenantModel
+        from app.modules.tenants.infrastructure.models import (TenantModel,
+                                                               UserModel)
 
         superadmin = UserModel(
             tenant_id=None,
@@ -198,10 +200,10 @@ def seed():
         print(f"  ✓ Customers: {len(customer_ids)} seeded")
 
         # ── 7. Purchase Orders ─────────────────────────────────────────────────
+        from app.modules.inventory.infrastructure.models import \
+            StockMovementModel
         from app.modules.purchase.infrastructure.models import (
-            PurchaseOrderModel, PurchaseOrderItemModel, GoodsReceiptModel
-        )
-        from app.modules.inventory.infrastructure.models import StockMovementModel
+            GoodsReceiptModel, PurchaseOrderItemModel, PurchaseOrderModel)
 
         # PO 1 — Fully received (created 10 days ago)
         po1 = PurchaseOrderModel(
@@ -300,12 +302,11 @@ def seed():
         print(f"  ✓ Purchase Orders: 2 POs, 2 Goods Receipts, stock movements seeded")
 
         # ── 8. Sales Orders ────────────────────────────────────────────────────
+        from app.modules.inventory.infrastructure.models import \
+            StockReservationModel
         from app.modules.sales.infrastructure.models import (
-            SalesOrderModel, SalesOrderItemModel,
-            SuratJalanModel, SuratJalanItemModel,
-            InvoiceModel, PaymentModel,
-        )
-        from app.modules.inventory.infrastructure.models import StockReservationModel
+            InvoiceModel, PaymentModel, SalesOrderItemModel, SalesOrderModel,
+            SuratJalanItemModel, SuratJalanModel)
 
         # SO 1 — Fully completed: fulfilled + invoiced + paid (5 days ago)
         so1 = SalesOrderModel(
