@@ -5,13 +5,14 @@ Alembic migration environment.
 Reads DATABASE_URL from .env so you never hardcode credentials.
 Sets search_path to 'public' explicitly so all tables land there.
 """
-
 import os
+import sys
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool, text
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # Load .env if present
 try:
     from dotenv import load_dotenv
