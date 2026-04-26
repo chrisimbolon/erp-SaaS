@@ -1,21 +1,16 @@
 """
 app/core/dependencies.py
-=========================
+==========================
 FastAPI dependency injection.
-Following your hr-app pattern.
 
-Usage in routes:
-    @router.post("/purchase-orders")
-    def create_po(
-        request: Request,
-        db: Session = Depends(get_db),
-        ctx: TenantContext = Depends(get_tenant_context),
-    ):
-        use_case = CreatePurchaseOrderUseCase(db, ctx.tenant_id, ctx.user_id)
-        ...
+TenantContext carries everything downstream use cases need:
+  tenant_id, user_id, user_role, email, full_name
+
+SuperAdmin: tenant_id = 0 (sentinel — no real tenant)
 """
 
 from dataclasses import dataclass
+from typing import Optional
 
 from app.core.database import SessionLocal
 from fastapi import Depends, Request
@@ -32,19 +27,31 @@ def get_db():
 
 @dataclass
 class TenantContext:
-    """Carries tenant_id, user_id, role — extracted from JWT by middleware."""
-    tenant_id: int
-    user_id: int
+    """
+    Populated by TenantMiddleware from the decoded JWT.
+    Injected via Depends(get_tenant_context) in every route.
+    """
+    tenant_id: Optional[int]   # None for SuperAdmin
+    user_id:   int
     user_role: str
+    email:     str
+    full_name: str
+
+    @property
+    def is_super_admin(self) -> bool:
+        return self.tenant_id == 0 or self.tenant_id is None
 
 
 def get_tenant_context(request: Request) -> TenantContext:
     """
-    Dependency that extracts tenant context set by TenantMiddleware.
-    Raises AttributeError if middleware didn't run (should never happen in prod).
+    Extracts the TenantContext set by TenantMiddleware.
+    Will raise AttributeError if middleware didn't run —
+    which should never happen in production.
     """
     return TenantContext(
         tenant_id=request.state.tenant_id,
         user_id=request.state.user_id,
         user_role=request.state.user_role,
+        email=request.state.email,
+        full_name=request.state.full_name,
     )
