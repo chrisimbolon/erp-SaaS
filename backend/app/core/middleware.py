@@ -1,16 +1,17 @@
 """
 app/core/middleware.py
 =======================
-TenantMiddleware: decodes JWT and populates request.state
-with all fields needed by TenantContext downstream.
+TenantMiddleware: decodes JWT and populates request.state.
 
-Public paths bypass auth entirely.
-All other paths MUST have a valid Bearer token.
+CRITICAL: Never raise HTTPException inside BaseHTTPMiddleware.
+          It breaks Starlette's exception handling chain and causes
+          'State has no attribute tenant_id' downstream.
+          Always return a JSONResponse directly instead.
 """
-
 from app.core.security import decode_jwt
-from fastapi import HTTPException, Request, status
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
 PUBLIC_PATHS = {
     "/health",
@@ -27,15 +28,16 @@ class TenantMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
 
-        # Allow public paths without auth
+        # Public paths — skip auth entirely, no state needed
         if path in PUBLIC_PATHS or path.startswith("/docs") or path.startswith("/openapi"):
             return await call_next(request)
 
+        # ── Validate token ────────────────────────────────────────────────────
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing or invalid Authorization header.",
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Missing or invalid Authorization header."},
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
@@ -43,17 +45,18 @@ class TenantMiddleware(BaseHTTPMiddleware):
         try:
             payload = decode_jwt(token)
         except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired token.",
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Invalid or expired token."},
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        # Inject all fields into request state
-        # TenantContext dependency reads from here
+        # ── Inject into request.state ─────────────────────────────────────────
+        # Always set ALL fields before calling call_next so that
+        # get_tenant_context() never hits AttributeError downstream.
         request.state.tenant_id = payload.get("tenant_id")   # 0 = SuperAdmin
-        request.state.user_id   = payload["user_id"]
-        request.state.user_role = payload["role"]
+        request.state.user_id   = payload.get("user_id", 0)
+        request.state.user_role = payload.get("role", "")
         request.state.email     = payload.get("email", "")
         request.state.full_name = payload.get("full_name", "")
 
