@@ -1,39 +1,38 @@
 """
 app/main.py
 ===========
-FastAPI entrypoint. EventBus wiring lives here in lifespan().
+KLA ERP SaaS — FastAPI entrypoint.
 
-Full wiring — 5 subscriptions:
+Routers:
+  /api/v1/auth       → login, register tenant, user management
+  /api/v1/purchase   → PO, goods receipt
+  /api/v1/sales      → SO, surat jalan, invoice, payment
+  /api/v1/inventory  → products, stock movements
 
-  Purchase fires:
-    GOODS_RECEIVED             → Inventory: stock IN
-    PURCHASE_ORDER_CANCELLED   → (future handler)
-
-  Sales fires:
-    STOCK_RESERVED             → Inventory: create reservation
-    ORDER_FULFILLED            → Inventory: deduct stock + release reservation
-    STOCK_RESERVATION_RELEASED → Inventory: release reservation (on SO cancel)
-
-This is the ONLY place modules are connected.
-All module code is completely unaware of other modules.
+EventBus wiring (complete):
+  GOODS_RECEIVED              Purchase → Inventory stock IN
+  STOCK_RESERVED              Sales    → Inventory reserve
+  ORDER_FULFILLED             Sales    → Inventory stock OUT + release reservation
+  STOCK_RESERVATION_RELEASED  Sales    → Inventory release reservation (cancel)
 """
 
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.middleware import TenantMiddleware
+# ── Routers ───────────────────────────────────────────────────────────────────
+from app.modules.auth.presentation.api.v1.routes import router as auth_router
 from app.modules.inventory.application.use_cases.release_reservation import \
     handle_release_reservation_event
 from app.modules.inventory.application.use_cases.reserve_stock import \
     handle_stock_reserved_event
-# ── Import handlers only — never the modules themselves ──────────────────────
+# ── Inventory event handlers ──────────────────────────────────────────────────
 from app.modules.inventory.application.use_cases.stock_in import \
     handle_goods_received_event
 from app.modules.inventory.application.use_cases.stock_out import \
     handle_order_fulfilled_event
 from app.modules.inventory.presentation.api.v1.routes import \
     router as inventory_router
-# ── Import routers ────────────────────────────────────────────────────────────
 from app.modules.purchase.presentation.api.v1.routes import \
     router as purchase_router
 from app.modules.sales.presentation.api.v1.routes import router as sales_router
@@ -41,21 +40,9 @@ from app.shared.events.bus import EventBus, Events
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# ─── EventBus Registration ────────────────────────────────────────────────────
 
 def register_event_handlers() -> None:
-    """
-    THE COMPLETE INTER-MODULE WIRING.
-
-    This function is the single source of truth for
-    how Purchase and Sales drive Inventory.
-
-    Read this and you understand the entire system.
-    """
-    # Purchase → Inventory
-    EventBus.subscribe(Events.GOODS_RECEIVED, handle_goods_received_event)
-
-    # Sales → Inventory
+    EventBus.subscribe(Events.GOODS_RECEIVED,             handle_goods_received_event)
     EventBus.subscribe(Events.STOCK_RESERVED,             handle_stock_reserved_event)
     EventBus.subscribe(Events.ORDER_FULFILLED,            handle_order_fulfilled_event)
     EventBus.subscribe(Events.STOCK_RESERVATION_RELEASED, handle_release_reservation_event)
@@ -63,16 +50,11 @@ def register_event_handlers() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # ── Startup ───────────────────────────────────────────────────────────────
     register_event_handlers()
     print(f"[KLA] EventBus ready → {EventBus.registered_events()}")
     yield
-    # ── Shutdown ──────────────────────────────────────────────────────────────
     EventBus.clear()
-    print("[KLA] EventBus cleared.")
 
-
-# ─── App Factory ──────────────────────────────────────────────────────────────
 
 def create_app() -> FastAPI:
     app = FastAPI(
@@ -91,8 +73,9 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(TenantMiddleware)
 
-    app.include_router(purchase_router, prefix="/api/v1/purchase",  tags=["Purchase"])
-    app.include_router(sales_router,    prefix="/api/v1/sales",     tags=["Sales"])
+    app.include_router(auth_router,      prefix="/api/v1/auth",      tags=["Auth"])
+    app.include_router(purchase_router,  prefix="/api/v1/purchase",  tags=["Purchase"])
+    app.include_router(sales_router,     prefix="/api/v1/sales",     tags=["Sales"])
     app.include_router(inventory_router, prefix="/api/v1/inventory", tags=["Inventory"])
 
     @app.get("/health")
@@ -100,7 +83,7 @@ def create_app() -> FastAPI:
         return {
             "status": "ok",
             "service": "KLA ERP",
-            "events_registered": EventBus.registered_events(),
+            "events": EventBus.registered_events(),
         }
 
     return app
