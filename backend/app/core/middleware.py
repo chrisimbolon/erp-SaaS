@@ -1,51 +1,60 @@
 """
 app/core/middleware.py
 =======================
-TenantMiddleware: extracts tenant_id from JWT and injects into request state.
+TenantMiddleware: decodes JWT and populates request.state
+with all fields needed by TenantContext downstream.
 
-Every request that hits a module route will have:
-  request.state.tenant_id  → int
-  request.state.user_id    → int
-  request.state.user_role  → str
-
-Modules NEVER read tenant_id from the request body.
-They always use request.state.tenant_id set here.
-This prevents tenant spoofing.
+Public paths bypass auth entirely.
+All other paths MUST have a valid Bearer token.
 """
 
 from app.core.security import decode_jwt
 from fastapi import HTTPException, Request, status
 from starlette.middleware.base import BaseHTTPMiddleware
 
-# Routes that don't require a tenant context
-PUBLIC_PATHS = {"/health", "/api/v1/auth/login", "/api/v1/auth/register", "/docs", "/openapi.json"}
+PUBLIC_PATHS = {
+    "/health",
+    "/api/v1/auth/login",
+    "/api/v1/auth/register",
+    "/docs",
+    "/openapi.json",
+    "/redoc",
+}
 
 
 class TenantMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
-        if request.url.path in PUBLIC_PATHS or request.url.path.startswith("/docs"):
+        path = request.url.path
+
+        # Allow public paths without auth
+        if path in PUBLIC_PATHS or path.startswith("/docs") or path.startswith("/openapi"):
             return await call_next(request)
 
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing or invalid Authorization header",
+                detail="Missing or invalid Authorization header.",
+                headers={"WWW-Authenticate": "Bearer"},
             )
 
-        token = auth_header.split(" ")[1]
+        token = auth_header.split(" ", 1)[1]
         try:
             payload = decode_jwt(token)
-        except Exception:
+        except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired token",
+                detail="Invalid or expired token.",
+                headers={"WWW-Authenticate": "Bearer"},
             )
 
-        # Inject into request state — available everywhere downstream
-        request.state.tenant_id = payload["tenant_id"]
-        request.state.user_id = payload["user_id"]
-        request.state.user_role = payload.get("role", "staff")
+        # Inject all fields into request state
+        # TenantContext dependency reads from here
+        request.state.tenant_id = payload.get("tenant_id")   # 0 = SuperAdmin
+        request.state.user_id   = payload["user_id"]
+        request.state.user_role = payload["role"]
+        request.state.email     = payload.get("email", "")
+        request.state.full_name = payload.get("full_name", "")
 
         return await call_next(request)
