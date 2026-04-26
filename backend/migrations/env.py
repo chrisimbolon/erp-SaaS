@@ -1,57 +1,68 @@
-import os
-import sys
+"""
+migrations/env.py
+==================
+Alembic migration environment.
+Reads DATABASE_URL from .env so you never hardcode credentials.
+Sets search_path to 'public' explicitly so all tables land there.
+"""
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import os
 from logging.config import fileConfig
 
 from alembic import context
-from app.core.config import settings
-# from app.modules.inventory.infrastructure import models as inventory_models
-from app.modules.inventory.infrastructure.models import (ProductModel,
-                                                         StockMovementModel,
-                                                         StockReservationModel)
-from app.modules.purchase.infrastructure import models as purchase_models
-from app.modules.sales.infrastructure import models as sales_models
-# 🔥 IMPORTANT: import ALL models so Alembic can see them
-from app.modules.tenants.infrastructure import models as tenants_models
-from app.shared.models.base import Base
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, pool, text
 
-# Alembic Config object
+# Load .env if present
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+except ImportError:
+    pass
+
 config = context.config
 
-# Use your app's DATABASE_URL (single source of truth)
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Override sqlalchemy.url from environment variable
+database_url = os.environ.get("DATABASE_URL")
+if database_url:
+    config.set_main_option("sqlalchemy.url", database_url)
 
-# Logging
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Metadata
+from app.modules.inventory.infrastructure.models import (ProductModel,
+                                                         StockMovementModel,
+                                                         StockReservationModel)
+from app.modules.purchase.infrastructure.models import (GoodsReceiptItemModel,
+                                                        GoodsReceiptModel,
+                                                        PurchaseOrderItemModel,
+                                                        PurchaseOrderModel)
+from app.modules.sales.infrastructure.models import (InvoiceModel,
+                                                     PaymentModel,
+                                                     SalesOrderItemModel,
+                                                     SalesOrderModel,
+                                                     SuratJalanItemModel,
+                                                     SuratJalanModel)
+from app.modules.tenants.infrastructure.models import TenantModel, UserModel
+# Import all models so Alembic sees them for autogenerate
+from app.shared.models.base import Base
+
 target_metadata = Base.metadata
 
 
-# ─────────────────────────────────────────────────────────────
-# OFFLINE
-# ─────────────────────────────────────────────────────────────
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
-
     context.configure(
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        compare_type=True,          # detect column type changes
+        # Force public schema
+        include_schemas=False,
     )
-
     with context.begin_transaction():
         context.run_migrations()
 
 
-# ─────────────────────────────────────────────────────────────
-# ONLINE
-# ─────────────────────────────────────────────────────────────
 def run_migrations_online() -> None:
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
@@ -60,17 +71,18 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        # Force public schema so tables don't land in 'core' or other schemas
+        connection.execute(text("SET search_path TO public"))
+
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            compare_type=True,      # detect type changes
+            include_schemas=False,
         )
 
         with context.begin_transaction():
             context.run_migrations()
 
-
-# ─────────────────────────────────────────────────────────────
 
 if context.is_offline_mode():
     run_migrations_offline()
