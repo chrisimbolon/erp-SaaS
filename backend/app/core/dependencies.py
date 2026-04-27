@@ -1,14 +1,3 @@
-"""
-app/core/dependencies.py
-==========================
-FastAPI dependency injection.
-
-TenantContext carries everything downstream use cases need:
-  tenant_id, user_id, user_role, email, full_name
-
-SuperAdmin: tenant_id = 0 (sentinel — no real tenant)
-"""
-
 from dataclasses import dataclass
 from typing import Optional
 
@@ -17,6 +6,9 @@ from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 
+# ─────────────────────────────────────────────
+# DB DEPENDENCY
+# ─────────────────────────────────────────────
 def get_db():
     db = SessionLocal()
     try:
@@ -25,16 +17,15 @@ def get_db():
         db.close()
 
 
+# ─────────────────────────────────────────────
+# TENANT CONTEXT
+# ─────────────────────────────────────────────
 @dataclass
 class TenantContext:
-    """
-    Populated by TenantMiddleware from the decoded JWT.
-    Injected via Depends(get_tenant_context) in every route.
-    """
-    tenant_id: Optional[int]   # None for SuperAdmin
-    user_id:   int
+    tenant_id: Optional[int]
+    user_id: int
     user_role: str
-    email:     str
+    email: str
     full_name: str
 
     @property
@@ -43,15 +34,12 @@ class TenantContext:
 
 
 def get_tenant_context(request: Request) -> TenantContext:
-    """
-    Extracts the TenantContext set by TenantMiddleware.
-    Will raise AttributeError if middleware didn't run —
-    which should never happen in production.
-    """
+    state = request.state
+
     return TenantContext(
-        tenant_id=request.state.tenant_id,
-        user_id=request.state.user_id,
-        user_role=request.state.user_role,
-        email=request.state.email,
-        full_name=request.state.full_name,
+        tenant_id=getattr(state, "tenant_id", None),
+        user_id=getattr(state, "user_id", 0),
+        user_role=getattr(state, "user_role", ""),
+        email=getattr(state, "email", ""),
+        full_name=getattr(state, "full_name", ""),
     )
