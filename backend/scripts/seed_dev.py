@@ -22,9 +22,8 @@ Creates:
 All passwords: KLA_Dev_2026! (change in production)
 """
 
-import os
 import sys
-
+import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datetime import datetime, timedelta, timezone
@@ -42,12 +41,19 @@ NOW = datetime.now(timezone.utc)
 def seed():
     db = SessionLocal()
     try:
+        # Guard against re-running seed on an already-seeded DB
+        from sqlalchemy import text
+        existing = db.execute(text("SELECT COUNT(*) FROM users")).scalar()
+        if existing > 0:
+            print(f"⚠️  Database already seeded ({existing} users found). Skipping.")
+            print("   To re-seed: truncate all tables first or use a fresh DB.")
+            return
+
         print("🌱 Seeding KLA development database...")
         print()
 
         # ── 1. SuperAdmin ─────────────────────────────────────────────────────
-        from app.modules.tenants.infrastructure.models import (TenantModel,
-                                                               UserModel)
+        from app.modules.tenants.infrastructure.models import UserModel, TenantModel
 
         superadmin = UserModel(
             tenant_id=None,
@@ -127,24 +133,8 @@ def seed():
         print(f"  ✓ Products: {len(products_data)} products seeded")
 
         # ── 5. Suppliers ───────────────────────────────────────────────────────
-        # Using a simple suppliers table (minimal — not full module yet)
-        # We'll just insert directly for seed purposes
-
+        # suppliers table is created by migration 005
         from sqlalchemy import text
-        db.execute(text("""
-            CREATE TABLE IF NOT EXISTS suppliers (
-                id         SERIAL PRIMARY KEY,
-                tenant_id  INTEGER NOT NULL,
-                name       VARCHAR(255) NOT NULL,
-                contact    VARCHAR(255),
-                phone      VARCHAR(50),
-                email      VARCHAR(255),
-                address    TEXT,
-                npwp       VARCHAR(30),
-                created_at TIMESTAMPTZ DEFAULT NOW(),
-                updated_at TIMESTAMPTZ DEFAULT NOW()
-            )
-        """))
 
         suppliers_data = [
             (TENANT_ID, "PT Pupuk Kaltim",          "Hendra",  "+62-811-111-001", "hendra@pupukkaltim.com",   "Bontang, Kalimantan Timur"),
@@ -165,21 +155,7 @@ def seed():
         print(f"  ✓ Suppliers: {len(supplier_ids)} seeded")
 
         # ── 6. Customers ───────────────────────────────────────────────────────
-        db.execute(text("""
-            CREATE TABLE IF NOT EXISTS customers (
-                id         SERIAL PRIMARY KEY,
-                tenant_id  INTEGER NOT NULL,
-                name       VARCHAR(255) NOT NULL,
-                contact    VARCHAR(255),
-                phone      VARCHAR(50),
-                email      VARCHAR(255),
-                address    TEXT,
-                npwp       VARCHAR(30),
-                credit_limit NUMERIC(15,2) DEFAULT 50000000,
-                created_at TIMESTAMPTZ DEFAULT NOW(),
-                updated_at TIMESTAMPTZ DEFAULT NOW()
-            )
-        """))
+        # customers table is created by migration 005
 
         customers_data = [
             (TENANT_ID, "UD Tani Makmur Sejahtera", "Pak Joko",  "+62-821-001-001", "joko@tanimakmur.com",    "Bekasi, Jawa Barat",    75000000),
@@ -200,10 +176,10 @@ def seed():
         print(f"  ✓ Customers: {len(customer_ids)} seeded")
 
         # ── 7. Purchase Orders ─────────────────────────────────────────────────
-        from app.modules.inventory.infrastructure.models import \
-            StockMovementModel
         from app.modules.purchase.infrastructure.models import (
-            GoodsReceiptModel, PurchaseOrderItemModel, PurchaseOrderModel)
+            PurchaseOrderModel, PurchaseOrderItemModel, GoodsReceiptModel
+        )
+        from app.modules.inventory.infrastructure.models import StockMovementModel
 
         # PO 1 — Fully received (created 10 days ago)
         po1 = PurchaseOrderModel(
@@ -302,11 +278,12 @@ def seed():
         print(f"  ✓ Purchase Orders: 2 POs, 2 Goods Receipts, stock movements seeded")
 
         # ── 8. Sales Orders ────────────────────────────────────────────────────
-        from app.modules.inventory.infrastructure.models import \
-            StockReservationModel
         from app.modules.sales.infrastructure.models import (
-            InvoiceModel, PaymentModel, SalesOrderItemModel, SalesOrderModel,
-            SuratJalanItemModel, SuratJalanModel)
+            SalesOrderModel, SalesOrderItemModel,
+            SuratJalanModel, SuratJalanItemModel,
+            InvoiceModel, PaymentModel,
+        )
+        from app.modules.inventory.infrastructure.models import StockReservationModel
 
         # SO 1 — Fully completed: fulfilled + invoiced + paid (5 days ago)
         so1 = SalesOrderModel(
